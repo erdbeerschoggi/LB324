@@ -1,0 +1,8 @@
+/target/
+/Frontend/dist/
+/Frontend/.stage/
+.env
+*.log
+.venv/
+_pycache_/
+.pytest_cache/

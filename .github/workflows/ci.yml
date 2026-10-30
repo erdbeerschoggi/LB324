@@ -1,0 +1,30 @@
+name: Tests und Build
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  test-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all --check
+      - run: cargo test --locked -p rust-rechner-backend
+      - run: cargo build --release --locked -p rust-rechner-backend
+      - run: cargo install trunk --version 0.21.14 --locked
+      - run: trunk build --release --locked
+        working-directory: Frontend
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rust-rechner-linux-${{ github.sha }}
+          path: |
+            target/release/rust-rechner-backend
+            Frontend/dist/

@@ -7,6 +7,7 @@ RUN cargo build --release --locked -p rust-rechner-backend
 RUN cd Frontend && trunk build --release --locked
 
 FROM debian:stable-slim
+LABEL org.opencontainers.image.source="https://github.com/erdbeerschoggi/LB324"
 RUN useradd --system --uid 10001 app
 WORKDIR /app
 COPY --from=build /app/target/release/rust-rechner-backend /app/server

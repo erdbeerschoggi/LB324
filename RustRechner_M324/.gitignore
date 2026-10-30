@@ -1,5 +1,0 @@
-/target/
-/Frontend/dist/
-/Frontend/.stage/
-.env
-*.log

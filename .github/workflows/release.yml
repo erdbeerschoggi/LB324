@@ -1,0 +1,52 @@
+name: Release
+
+on:
+  push:
+    tags: [ "v*" ]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked -p rust-rechner-backend
+      - run: cargo build --release --locked -p rust-rechner-backend
+      - run: cargo install trunk --version 0.21.14 --locked
+      - run: trunk build --release --locked
+        working-directory: Frontend
+      - name: Release-Paket zusammenstellen
+        run: |
+          mkdir paket
+          cp target/release/rust-rechner-backend paket/
+          cp -r Frontend/dist paket/public
+          tar -czf rust-rechner-${{ github.ref_name }}-linux.tar.gz -C paket .
+      - name: GitHub Release erstellen
+        uses: softprops/action-gh-release@v2
+        with:
+          files: rust-rechner-${{ github.ref_name }}-linux.tar.gz
+          generate_release_notes: true
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/erdbeerschoggi/lb324:${{ github.ref_name }}
+            ghcr.io/erdbeerschoggi/lb324:latest

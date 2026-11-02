@@ -22,6 +22,14 @@ jobs:
       - run: cargo install trunk --version 0.21.14 --locked
       - run: trunk build --release --locked
         working-directory: Frontend
+      - name: Integrationstest des gebauten Servers
+        run: |
+          STATIC_DIR=Frontend/dist PORT=3000 ./target/release/rust-rechner-backend &
+          for i in $(seq 1 20); do curl -sf http://localhost:3000/api/health && break; sleep 1; done
+          curl --fail http://localhost:3000/api/health
+          curl --fail http://localhost:3000/ > /dev/null
+          code=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H "content-type: application/json" -d '{"x":8,"y":0,"op":"/"}' http://localhost:3000/api/calculate)
+          test "$code" = "400"
       - uses: actions/upload-artifact@v4
         with:
           name: rust-rechner-linux-${{ github.sha }}

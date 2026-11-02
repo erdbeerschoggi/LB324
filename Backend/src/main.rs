@@ -1,6 +1,7 @@
 use axum::{
     Json, Router,
     extract::State,
+    http::StatusCode,
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
@@ -20,16 +21,22 @@ struct CalcResponse {
     result: f64,
 }
 
+#[derive(Serialize)]
+struct ErrorResponse {
+    error: String,
+}
+
 #[derive(Deserialize)]
 struct MemoryRequest {
     value: f64,
 }
-
 // Braucht man für den gemeinsamen Zugriff auf den Speicher (Memory) zwischen verschiedenen Anfragen
 type SharedState = Arc<Mutex<f64>>;
 
 // POST: Berechnung durchführen
-async fn calculate(Json(payload): Json<CalcRequest>) -> Json<CalcResponse> {
+async fn calculate(
+    Json(payload): Json<CalcRequest>,
+) -> Result<Json<CalcResponse>, (StatusCode, Json<ErrorResponse>)> {
     let x = payload.x;
     let y = payload.y;
     let op = payload.op.trim();
@@ -39,12 +46,20 @@ async fn calculate(Json(payload): Json<CalcRequest>) -> Json<CalcResponse> {
         "-" => x - y,
         "*" => x * y,
         "/" => {
-            if y == 0.0 { 0.0 } else { x / y } // Verhindert Crash durch Division durch 0
+            if y == 0.0 {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    Json(ErrorResponse {
+                        error: "Division durch null ist nicht möglich.".to_string(),
+                    }),
+                ));
+            }
+            x / y
         }
         _ => 0.0,
     };
 
-    Json(CalcResponse { result })
+    Ok(Json(CalcResponse { result }))
 }
 
 //GET: Aktuellen Wert aus dem Speicher abrufen
@@ -149,5 +164,28 @@ mod tests {
         request(router.clone(), "DELETE", "/api/memory", json!(null)).await;
         let cleared = request(router, "GET", "/api/memory", json!(null)).await;
         assert_eq!(cleared["result"], json!(0.0));
+    }
+    #[tokio::test]
+    async fn division_by_zero_returns_error_message() {
+        let response = app()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/api/calculate")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        json!({"x": 8.0, "y": 0.0, "op": "/"}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let bytes = to_bytes(response.into_body(), 1024).await.unwrap();
+        let value: Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            value["error"],
+            json!("Division durch null ist nicht möglich.")
+        );
     }
 }
